@@ -86,12 +86,26 @@ class GraphRetriever:
     """
     Handles Neo4j interactions for Knowledge Graph retrieval.
     """
-    def __init__(self):
+    def __init__(self, uri=None, user=None, password=None):
+        """
+        Initialize GraphRetriever with Neo4j connection parameters.
+        
+        Args:
+            uri: Neo4j URI (defaults to config.NEO4J_URI)
+            user: Neo4j username (defaults to config.NEO4J_USER)
+            password: Neo4j password (defaults to config.NEO4J_PASSWORD)
+        """
         self.driver = None
+        
+        # Use provided values or fall back to config defaults
+        neo4j_uri = uri or config.NEO4J_URI
+        neo4j_user = user or config.NEO4J_USER
+        neo4j_password = password or config.NEO4J_PASSWORD
+        
         try:
             self.driver = GraphDatabase.driver(
-                config.NEO4J_URI, 
-                auth=(config.NEO4J_USER, config.NEO4J_PASSWORD)
+                neo4j_uri, 
+                auth=(neo4j_user, neo4j_password)
             )
             self.driver.verify_connectivity()
         except Exception as e:

@@ -1,19 +1,57 @@
 import streamlit as st
 import os
 import tempfile
-from modules import ui_components, document_processing, retrieval_modes, token_analysis, scratchpad_db, advanced_rag, context_engineering, role_prompts, langgraph_visual
+from modules import ui_components, document_processing, retrieval_modes, token_analysis, scratchpad_db, advanced_rag, context_engineering, role_prompts, langgraph_visual, user_config
 import config
 
-# Initialize modules
-doc_processor = document_processing.DocumentProcessor()
-token_analyzer = token_analysis.TokenAnalyzer()
-pad = scratchpad_db.Scratchpad()
-hybrid_retriever = retrieval_modes.HybridRetriever(doc_processor.embeddings)
-graph_retriever = retrieval_modes.GraphRetriever()
-rag_engine = advanced_rag.AdvancedRAG(hybrid_retriever, graph_retriever, pad)
+def initialize_modules(user_config_dict=None):
+    """Initialize all modules with user-provided configuration"""
+    # Get OpenAI API key
+    api_key = config.get_openai_api_key(user_config_dict)
+    
+    # Set OpenAI API key in environment if provided
+    if api_key:
+        os.environ["OPENAI_API_KEY"] = api_key
+    
+    # Initialize document processor (uses OpenAI API key from env)
+    doc_processor = document_processing.DocumentProcessor()
+    
+    # Initialize other modules
+    token_analyzer = token_analysis.TokenAnalyzer()
+    pad = scratchpad_db.Scratchpad()
+    hybrid_retriever = retrieval_modes.HybridRetriever(doc_processor.embeddings)
+    
+    # Get Neo4j config
+    neo4j_config = config.get_neo4j_config(user_config_dict)
+    graph_retriever = retrieval_modes.GraphRetriever(
+        uri=neo4j_config["uri"],
+        user=neo4j_config["user"],
+        password=neo4j_config["password"]
+    )
+    
+    rag_engine = advanced_rag.AdvancedRAG(hybrid_retriever, graph_retriever, pad)
+    
+    return doc_processor, token_analyzer, pad, hybrid_retriever, graph_retriever, rag_engine
 
 def main():
     ui_components.render_header()
+    
+    # Show configuration form first
+    st.markdown("---")
+    user_config_dict = user_config.render_config_form()
+    user_config.render_config_display()
+    
+    # Check if required config is set
+    api_key = config.get_openai_api_key(user_config_dict)
+    if not api_key:
+        st.warning("⚠️ Please configure your OpenAI API Key to continue.")
+        st.stop()
+    
+    st.markdown("---")
+    
+    # Initialize modules with user config
+    doc_processor, token_analyzer, pad, hybrid_retriever, graph_retriever, rag_engine = initialize_modules(user_config_dict)
+    
     ingestion_mode, selected_mode, selected_role = ui_components.render_sidebar(
         retrieval_modes.RetrievalMode, 
         role_prompts.RolePrompts
@@ -106,9 +144,10 @@ def main():
         
         # Neo4j Access
         st.markdown("### Neo4j Access")
+        neo4j_config = config.get_neo4j_config(user_config_dict)
         st.link_button("Open Neo4j Browser", "http://localhost:7474")
-        st.caption(f"**User:** `{config.NEO4J_USER}`")
-        st.caption(f"**Password:** `{config.NEO4J_PASSWORD}`")
+        st.caption(f"**User:** `{neo4j_config['user']}`")
+        st.caption(f"**Password:** `{'*' * len(neo4j_config['password'])}`")
         
         ui_components.render_scratchpad(pad.load())
             
